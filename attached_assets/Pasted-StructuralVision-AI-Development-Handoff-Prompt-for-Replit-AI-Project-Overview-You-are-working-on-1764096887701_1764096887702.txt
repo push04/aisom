@@ -1,0 +1,238 @@
+StructuralVision AI - Development Handoff Prompt for Replit AI
+Project Overview
+You are working on StructuralVision AI, a production-ready React web application for structural engineering analysis. The app combines AI + Engineering with TensorFlow.js for computer vision and OpenRouter for LLM-based explanations.
+
+Current Tech Stack:
+
+Frontend: React + Vite + Tailwind CSS + JavaScript
+AI/ML: TensorFlow.js (@tensorflow-models/pose-detection)
+Backend: Netlify Functions (OpenRouter proxy, Geocoding proxy)
+Charts: Recharts
+Maps: OpenStreetMap (iframe embed)
+Deployment: Netlify (configured)
+Current State
+✅ Completed Features
+Dashboard - Overview cards, recent analyses (localStorage persistence)
+Crack Analyzer - Image upload, segmentation simulation, section loss calculations, AI explanations
+Beam Deflection - Advanced calculator with:
+3 beam types (Simply Supported, Cantilever, Fixed-Fixed)
+3 load types (Point, UDL, Triangular)
+3 diagram modes (Deflection, Moment, Shear)
+Material database (8 materials: steel, aluminum, concrete, timber, FRP)
+Export features (JSON, Text Report, Copy to Clipboard)
+Ergonomics - Webcam pose detection, risk assessment, back load calculations
+Site Context - Weather data (Open-Meteo), OSM map, location search
+🔧 Infrastructure
+Error boundaries on all pages
+Material database utility (
+src/utils/materials.js
+)
+Unit conversion utility (
+src/utils/unitConversion.js
+)
+Export utilities (
+src/utils/exportUtils.js
+)
+Netlify Functions for backend (netlify/functions/)
+🐛 Known Issues
+AI features (Explain Results buttons) don't work in npm run dev - require Netlify deployment
+Geocoding search requires Netlify deployment
+Camera permissions need HTTPS for production
+Your Mission
+Continue enhancing this application with the following priorities:
+
+Priority 1: Enhance Existing Features
+Crack Analyzer Improvements
+Better Segmentation:
+
+Integrate actual TF.js DeepLab model or a crack detection model
+Current: simple dark pixel detection (placeholder)
+Goal: Train or use pre-trained model for crack segmentation
+Multiple Image Comparison:
+
+Allow uploading 2-4 images
+Side-by-side comparison view
+Progress tracking over time
+Measurement Tools:
+
+Add ruler/scale reference
+Calculate actual crack dimensions (mm/cm) not just percentage
+Crack width estimation
+Beam Deflection Enhancements
+Load Combinations:
+
+Multiple loads on same beam
+Dead load + Live load combinations
+Load factors (LRFD method)
+Cross-Section Designer:
+
+Visual I-beam/rectangular/circular section builder
+Auto-calculate I (moment of inertia) from dimensions
+Section properties calculator
+Comparison Mode:
+
+Compare 2-3 beam configurations side-by-side
+"What-if" analysis visualization
+Deflection Limits Check:
+
+L/360, L/240 deflection limits
+Color-coded pass/fail indicators
+Serviceability checks
+Ergonomics Improvements
+REBA/RULA Scoring:
+
+Implement full REBA (Rapid Entire Body Assessment) score
+Detailed body part angles
+Professional ergonomic assessment
+Recording & Playback:
+
+Record posture over time
+Playback with timeline
+Export posture data
+Multiple Person Detection:
+
+Detect multiple workers
+Team ergonomics assessment
+Site Context Enhancements
+Historical Weather Data:
+
+Past 7/30 days weather
+Temperature/wind trends
+Construction scheduling recommendations
+Solar Analysis:
+
+Sun path visualization
+Shadow analysis for structures
+Thermal loading estimates
+Seismic Data:
+
+Earthquake hazard maps (USGS API)
+Seismic zone classification
+Design recommendations
+Priority 2: New Features
+1. Column Design Tool
+Axial load + moment (P-M interaction)
+Slenderness check
+Buckling analysis
+Steel column design per AISC
+Concrete column design per ACI
+2. Connection Design
+Bolt pattern design
+Weld sizing
+Shear tab connections
+Moment connections
+3. Material Testing Module
+Stress-strain curve plotter
+Load-displacement data input
+Young's modulus calculator
+Yield strength identification
+4. 3D Visualization
+Three.js integration
+3D beam deflection view
+Rotate/zoom/pan controls
+Animated loading sequence
+5. Collaboration Features
+Share analysis via link
+Comment on analyses
+Team workspace
+Real-time collaboration (Firebase/Supabase)
+6. Mobile App
+Progressive Web App (PWA) configuration
+Offline mode with service workers
+Mobile-optimized UI
+Camera integration for on-site analysis
+Priority 3: UX/UI Polish
+Onboarding Tutorial:
+
+Interactive walkthrough for new users
+Tooltips on parameters
+Example projects
+Keyboard Shortcuts:
+
+Quick navigation (Cmd/Ctrl + number keys)
+Copy/paste results
+Export shortcuts
+Dark Mode Toggle:
+
+Add theme switcher to navbar
+Save preference to localStorage
+Smooth transition animations
+Responsive Design:
+
+Better mobile layouts
+Touch-friendly controls
+Collapsible sidebars
+Accessibility:
+
+ARIA labels
+Keyboard navigation
+Screen reader support
+High contrast mode
+Priority 4: Backend & Deployment
+Database Integration:
+
+Option: Supabase or Firebase
+Save analyses to cloud
+User authentication
+Team workspaces
+PDF Report Generation:
+
+Use jsPDF or react-pdf
+Professional branded reports
+Include charts and diagrams
+Company logo watermark
+API Rate Limiting:
+
+Implement rate limiting for OpenRouter
+Cache common AI responses
+User quotas
+Testing:
+
+Unit tests for beam formulas (Vitest)
+Integration tests for pages
+E2E tests (Playwright)
+Priority 5: Advanced Engineering Features
+Finite Element Analysis (FEA):
+
+Simple 2D FEA solver
+Truss analysis
+Frame analysis
+Stress visualization
+Code Compliance Checking:
+
+AISC/ACI code checks
+Eurocode support
+Indian Standard (IS) code
+Automated compliance reports
+Cost Estimation:
+
+Material quantity takeoff
+Cost database
+Labor cost estimation
+Project budgeting tool
+Structural Optimization:
+
+Genetic algorithm for beam sizing
+Minimize weight while meeting constraints
+Multi-objective optimization
+Implementation Guidelines
+Code Quality
+Follow existing patterns in the codebase
+Use TypeScript if adding type safety
+Maintain component modularity
+Add JSDoc comments for complex functions
+Performance
+Lazy load heavy components
+Optimize TF.js model loading
+Use React.memo for expensive renders
+Implement virtualization for large lists
+Error Handling
+Always wrap risky operations in try-catch
+Use ErrorBoundary for component crashes
+Provide user-friendly error messages
+Log errors to console with context
+Testing Strategy
+Write tests for utility functions first
+Test edge cases (zero values, negative numbers)
+Mock TensorFlow.js in tests
+Test export functionality
