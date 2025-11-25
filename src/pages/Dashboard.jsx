@@ -12,27 +12,27 @@ function Dashboard() {
   
   const stats = [
     {
-      title: 'Total Analyses',
+      title: 'Total Inspections',
       value: recentAnalyses.length,
-      label: 'Projects',
+      label: 'Assets',
       color: 'from-primary-700 to-primary-800'
     },
     {
-      title: 'Structural Scans',
+      title: 'Rust & Wear Scans',
       value: recentAnalyses.filter(a => a.type === 'crack').length,
-      label: 'Inspections',
+      label: 'Locomotives',
       color: 'from-danger/80 to-danger'
     },
     {
-      title: 'Beam Analysis',
+      title: 'Bridge Analytics',
       value: recentAnalyses.filter(a => a.type === 'beam').length,
-      label: 'Calculations',
+      label: 'Structures',
       color: 'from-accent/80 to-accent'
     },
     {
-      title: 'Ergonomic Assessments',
+      title: 'Rolling Stock Checks',
       value: recentAnalyses.filter(a => a.type === 'ergonomics').length,
-      label: 'Evaluations',
+      label: 'Assessments',
       color: 'from-warning/80 to-warning'
     }
   ]
@@ -41,8 +41,8 @@ function Dashboard() {
     <div className="min-h-screen bg-primary-950">
       <div className="container mx-auto px-6 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Analysis Dashboard</h1>
-          <p className="text-secondary-300">Comprehensive structural engineering analysis platform</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Rail Operations Command Center</h1>
+          <p className="text-secondary-300">AI-powered monitoring for Indian Railway infrastructure and rolling stock</p>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -73,7 +73,7 @@ function Dashboard() {
                   <svg className="w-16 h-16 mx-auto mb-4 text-secondary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                  <p className="text-secondary-400">No analysis records. Begin by launching one of the analysis modules.</p>
+                  <p className="text-secondary-400">No inspection records. Begin by launching Rust Scanner, Bridge Analysis, or Track Designer modules.</p>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -105,32 +105,32 @@ function Dashboard() {
                 href="/crack-analyzer" 
                 className="block p-4 bg-primary-800 rounded border border-primary-700 hover:border-accent hover:bg-primary-700 transition-all duration-200"
               >
-                <h3 className="font-semibold text-white mb-1">Structural Integrity Scan</h3>
-                <p className="text-sm text-secondary-400">Image-based crack detection and analysis</p>
+                <h3 className="font-semibold text-white mb-1">Rust & Wear Scanner</h3>
+                <p className="text-sm text-secondary-400">Locomotive and track corrosion detection</p>
               </a>
               
               <a 
                 href="/beam-deflection" 
                 className="block p-4 bg-primary-800 rounded border border-primary-700 hover:border-accent hover:bg-primary-700 transition-all duration-200"
               >
-                <h3 className="font-semibold text-white mb-1">Beam Analysis Module</h3>
-                <p className="text-sm text-secondary-400">SFD, BMD, deflection calculations</p>
+                <h3 className="font-semibold text-white mb-1">Bridge Girder Analysis</h3>
+                <p className="text-sm text-secondary-400">IRS Bridge Rules and load calculations</p>
               </a>
               
               <a 
                 href="/ergonomics" 
                 className="block p-4 bg-primary-800 rounded border border-primary-700 hover:border-accent hover:bg-primary-700 transition-all duration-200"
               >
-                <h3 className="font-semibold text-white mb-1">Ergonomic Analysis</h3>
-                <p className="text-sm text-secondary-400">AI-powered posture assessment</p>
+                <h3 className="font-semibold text-white mb-1">Rolling Stock Geometry</h3>
+                <p className="text-sm text-secondary-400">Bogie alignment and clearance checks</p>
               </a>
               
               <a 
                 href="/site-context" 
                 className="block p-4 bg-primary-800 rounded border border-primary-700 hover:border-accent hover:bg-primary-700 transition-all duration-200"
               >
-                <h3 className="font-semibold text-white mb-1">Site Context Data</h3>
-                <p className="text-sm text-secondary-400">Environmental and location analysis</p>
+                <h3 className="font-semibold text-white mb-1">Corridor Environment</h3>
+                <p className="text-sm text-secondary-400">Monsoon, soil, and thermal monitoring</p>
               </a>
             </div>
           </div>

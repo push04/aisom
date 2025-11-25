@@ -1,347 +1,275 @@
-import React, { useState, useRef, useEffect } from 'react'
-import * as poseDetection from '@tensorflow-models/pose-detection'
-import '@tensorflow/tfjs'
+import React, { useState, useRef } from 'react'
+import { analyzeStructuralDiagram } from '../utils/openrouterAPI'
 
 function Ergonomics() {
-  const [cameraActive, setCameraActive] = useState(false)
-  const [assessment, setAssessment] = useState(null)
-  const [error, setError] = useState(null)
+  const [image, setImage] = useState(null)
+  const [imageData, setImageData] = useState(null)
+  const [analysis, setAnalysis] = useState(null)
   const [loading, setLoading] = useState(false)
-  const videoRef = useRef(null)
-  const canvasRef = useRef(null)
-  const detectorRef = useRef(null)
+  const [error, setError] = useState(null)
+  const [context, setContext] = useState('')
+  const fileInputRef = useRef(null)
   
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { width: 640, height: 480 } 
-      })
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        try {
-          await videoRef.current.play()
-          setCameraActive(true)
-          setError(null)
-        } catch (playErr) {
-          console.error('Video play error:', playErr)
-          setError('Failed to start video playback. Please try again.')
-        }
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload a valid image file')
+      return
+    }
+    
+    setError(null)
+    setAnalysis(null)
+    
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const img = new Image()
+      img.onload = () => {
+        setImage(img)
+        setImageData(event.target.result)
       }
-    } catch (err) {
-      setError('Camera access denied or not available. Please enable camera permissions.')
-      console.error('Camera error:', err)
-    }
-  }
-  
-  const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const tracks = videoRef.current.srcObject.getTracks()
-      tracks.forEach(track => track.stop())
-      videoRef.current.srcObject = null
-      setCameraActive(false)
-    }
-  }
-  
-  const loadDetector = async () => {
-    try {
-      if (!detectorRef.current) {
-        const model = poseDetection.SupportedModels.MoveNet
-        const detectorConfig = {
-          modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-        }
-        detectorRef.current = await poseDetection.createDetector(model, detectorConfig)
+      img.onerror = () => {
+        setError('Failed to load image. Please try a different file.')
       }
-      return detectorRef.current
-    } catch (err) {
-      console.error('Error loading pose detector:', err)
-      setError('Failed to load pose detection model.')
-      return null
+      img.src = event.target.result
     }
+    reader.onerror = () => {
+      setError('Failed to read file. Please try again.')
+    }
+    reader.readAsDataURL(file)
   }
   
-  const calculateAngle = (p1, p2, p3) => {
-    const radians = Math.atan2(p3.y - p2.y, p3.x - p2.x) - Math.atan2(p1.y - p2.y, p1.x - p2.x)
-    let angle = Math.abs(radians * 180.0 / Math.PI)
-    if (angle > 180) angle = 360 - angle
-    return angle
-  }
-  
-  const analyzePosture = async () => {
-    if (!videoRef.current) return
+  const analyzeDiagram = async () => {
+    if (!imageData) {
+      setError('Please upload an image first')
+      return
+    }
     
     setLoading(true)
+    setError(null)
+    
     try {
-      const detector = await loadDetector()
+      const result = await analyzeStructuralDiagram(imageData, context)
+      setAnalysis(result)
       
-      if (!detector) {
-        setLoading(false)
-        return
-      }
+      const analyses = JSON.parse(localStorage.getItem('recentAnalyses') || '[]')
+      analyses.unshift({
+        type: 'diagram',
+        title: 'Structural Diagram Analysis',
+        timestamp: new Date().toISOString(),
+        data: { hasContext: !!context }
+      })
+      localStorage.setItem('recentAnalyses', JSON.stringify(analyses.slice(0, 50)))
       
-      const poses = await detector.estimatePoses(videoRef.current)
-      
-      if (poses.length > 0) {
-        const keypoints = poses[0].keypoints
-        
-        const nose = keypoints.find(kp => kp.name === 'nose')
-        const leftShoulder = keypoints.find(kp => kp.name === 'left_shoulder')
-        const rightShoulder = keypoints.find(kp => kp.name === 'right_shoulder')
-        const leftHip = keypoints.find(kp => kp.name === 'left_hip')
-        const rightHip = keypoints.find(kp => kp.name === 'right_hip')
-        const leftElbow = keypoints.find(kp => kp.name === 'left_elbow')
-        const rightElbow = keypoints.find(kp => kp.name === 'right_elbow')
-        
-        const shoulder = leftShoulder && rightShoulder ? {
-          x: (leftShoulder.x + rightShoulder.x) / 2,
-          y: (leftShoulder.y + rightShoulder.y) / 2
-        } : null
-        
-        const hip = leftHip && rightHip ? {
-          x: (leftHip.x + rightHip.x) / 2,
-          y: (leftHip.y + rightHip.y) / 2
-        } : null
-        
-        let neckAngle = 15
-        if (nose && shoulder && hip) {
-          neckAngle = Math.abs(90 - calculateAngle(nose, shoulder, hip))
-        }
-        
-        let backAngle = 10
-        if (shoulder && hip) {
-          const vertical = { x: shoulder.x, y: shoulder.y - 100 }
-          backAngle = Math.abs(90 - calculateAngle(vertical, shoulder, hip))
-        }
-        
-        let shoulderAngle = 10
-        if (leftShoulder && leftElbow && rightShoulder && rightElbow) {
-          const leftAngle = calculateAngle(leftElbow, leftShoulder, { x: leftShoulder.x + 100, y: leftShoulder.y })
-          const rightAngle = calculateAngle(rightElbow, rightShoulder, { x: rightShoulder.x + 100, y: rightShoulder.y })
-          shoulderAngle = Math.max(leftAngle, rightAngle)
-        }
-        
-        const neckRisk = neckAngle < 20 ? 'Low' : neckAngle < 30 ? 'Medium' : 'High'
-        const backRisk = backAngle < 30 ? 'Low' : backAngle < 45 ? 'Medium' : 'High'
-        
-        const backLoad = (backAngle * 0.5 + neckAngle * 0.3).toFixed(1)
-        
-        const riskScore = (neckAngle / 40 * 33 + backAngle / 50 * 34 + shoulderAngle / 30 * 33).toFixed(0)
-        
-        let overallRisk = 'Low'
-        if (riskScore > 70) overallRisk = 'High'
-        else if (riskScore > 40) overallRisk = 'Medium'
-        
-        setAssessment({
-          neckAngle: neckAngle.toFixed(1),
-          backAngle: backAngle.toFixed(1),
-          shoulderAngle: shoulderAngle.toFixed(1),
-          neckRisk,
-          backRisk,
-          backLoad,
-          riskScore,
-          overallRisk,
-          timestamp: new Date().toISOString()
-        })
-        
-        const analyses = JSON.parse(localStorage.getItem('recentAnalyses') || '[]')
-        analyses.unshift({
-          type: 'ergonomics',
-          title: 'Ergonomic Posture Assessment',
-          timestamp: new Date().toISOString(),
-          data: { riskScore, overallRisk }
-        })
-        localStorage.setItem('recentAnalyses', JSON.stringify(analyses.slice(0, 50)))
-      } else {
-        setError('No person detected in frame. Please ensure you are visible in the camera.')
-      }
     } catch (err) {
-      console.error('Pose analysis error:', err)
-      setError('Failed to analyze posture. Please try again.')
+      console.error('Analysis error:', err)
+      setError(`Analysis failed: ${err.message}. Please check your API configuration.`)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
   
-  useEffect(() => {
-    return () => {
-      stopCamera()
-    }
-  }, [])
-  
   return (
-    <div className="min-h-screen bg-primary-950">
-      <div className="container mx-auto px-6 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Ergonomic Assessment Module</h1>
-          <p className="text-secondary-300">AI-powered biomechanical posture analysis and risk evaluation</p>
+    <div className="min-h-screen bg-primary-950 pb-16">
+      <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Rolling Stock Geometry Analyzer</h1>
+          <p className="text-sm sm:text-base text-secondary-300">AI-powered analysis of bogie alignment, wheel spacing, and loading gauge compliance</p>
         </div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {error && (
+          <div className="mb-6 bg-danger/10 border border-danger/30 text-danger p-4 rounded-lg">
+            <p className="font-semibold">Error</p>
+            <p className="text-sm">{error}</p>
+          </div>
+        )}
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
           <div className="bg-primary-900 rounded-lg shadow-lg border border-primary-800">
-            <div className="px-6 py-4 border-b border-primary-800">
-              <h2 className="text-xl font-bold text-white">Camera Interface</h2>
+            <div className="px-4 sm:px-6 py-4 border-b border-primary-800">
+              <h2 className="text-lg sm:text-xl font-bold text-white">Diagram Upload</h2>
             </div>
             
-            <div className="p-6">
-              {error && (
-                <div className="bg-danger/10 border border-danger/30 text-danger p-4 rounded mb-4">
-                  {error}
-                </div>
-              )}
+            <div className="p-4 sm:p-6">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
               
-              <div className="mb-4 space-y-2">
-                {!cameraActive ? (
-                  <button
-                    onClick={startCamera}
-                    className="w-full bg-accent hover:bg-accent-hover text-white py-3 rounded-lg transition-all duration-200 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
-                  >
-                    Activate Camera
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      onClick={stopCamera}
-                      className="w-full bg-danger hover:opacity-90 text-white py-3 rounded-lg transition-all duration-200 font-semibold"
-                    >
-                      Stop Camera
-                    </button>
-                    <button
-                      onClick={analyzePosture}
-                      className="w-full bg-success hover:opacity-90 text-white py-3 rounded-lg transition-all duration-200 font-semibold"
-                    >
-                      Analyze Posture
-                    </button>
-                  </>
-                )}
+              <button
+                onClick={() => fileInputRef.current.click()}
+                className="w-full bg-accent hover:bg-accent-hover text-white py-3 rounded-lg transition-all duration-200 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 mb-4"
+              >
+                Upload Structural Diagram
+              </button>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-white mb-2">
+                  Additional Context (Optional)
+                </label>
+                <textarea
+                  value={context}
+                  onChange={(e) => setContext(e.target.value)}
+                  placeholder="e.g., 'This is a simply supported beam with a point load at midspan' or 'Specify material properties, load units, etc.'"
+                  className="w-full bg-primary-800 text-white p-3 rounded-lg border border-primary-700 focus:border-accent focus:outline-none resize-none"
+                  rows={3}
+                />
+                <p className="text-xs text-secondary-500 mt-1">
+                  Provide additional information to improve analysis accuracy
+                </p>
               </div>
               
-              <div className="relative bg-black rounded overflow-hidden" style={{ aspectRatio: '4/3' }}>
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  className="w-full h-full object-cover"
-                />
-                <canvas ref={canvasRef} className="hidden" />
-                
-                {!cameraActive && (
-                  <div className="absolute inset-0 flex items-center justify-center text-white bg-primary-800">
-                    <div className="text-center">
-                      <svg className="w-16 h-16 mx-auto mb-2 text-secondary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                      <p className="text-sm text-secondary-400">Camera Inactive</p>
+              {imageData && (
+                <>
+                  <button
+                    onClick={analyzeDiagram}
+                    disabled={loading}
+                    className="w-full bg-success hover:opacity-90 text-white py-3 rounded-lg transition-all duration-200 font-semibold mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? 'Analyzing...' : 'Analyze Diagram'}
+                  </button>
+                  
+                  <div>
+                    <h3 className="font-semibold text-white mb-2 text-xs sm:text-sm uppercase tracking-wide">Uploaded Diagram</h3>
+                    <div className="bg-primary-800 p-2 rounded">
+                      <img src={imageData} alt="Structural Diagram" className="w-full rounded" />
                     </div>
                   </div>
-                )}
+                </>
+              )}
+              
+              <div className="mt-6 bg-primary-800/50 p-4 rounded-lg border border-primary-700">
+                <h3 className="font-semibold text-white mb-2 text-sm">Supported Diagrams:</h3>
+                <ul className="text-xs sm:text-sm text-secondary-300 space-y-1">
+                  <li>• Hand-drawn structural sketches</li>
+                  <li>• Beam, truss, and frame diagrams</li>
+                  <li>• Load and support configurations</li>
+                  <li>• Free body diagrams (FBD)</li>
+                  <li>• Shear force and bending moment diagrams</li>
+                  <li>• Structural details and connections</li>
+                </ul>
               </div>
             </div>
           </div>
           
           <div className="bg-primary-900 rounded-lg shadow-lg border border-primary-800">
-            <div className="px-6 py-4 border-b border-primary-800">
-              <h2 className="text-xl font-bold text-white">Assessment Results</h2>
+            <div className="px-4 sm:px-6 py-4 border-b border-primary-800">
+              <h2 className="text-lg sm:text-xl font-bold text-white">AI Analysis Results</h2>
             </div>
             
-            <div className="p-6">
+            <div className="p-4 sm:p-6 max-h-[800px] overflow-y-auto">
               {loading && (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-16 w-16 border-4 border-accent border-t-transparent mx-auto"></div>
-                  <p className="mt-4 text-secondary-400">Analyzing biomechanical parameters...</p>
+                  <p className="mt-4 text-secondary-400">Analyzing structural diagram...</p>
+                  <p className="mt-2 text-xs text-secondary-500">This may take 10-30 seconds</p>
                 </div>
               )}
               
-              {assessment && !loading ? (
+              {analysis && !loading && (
                 <div className="space-y-4">
-                  <div className={`p-6 rounded-lg border-2 ${
-                    assessment.overallRisk === 'Low' ? 'bg-success/10 border-success' :
-                    assessment.overallRisk === 'Medium' ? 'bg-warning/10 border-warning' :
-                    'bg-danger/10 border-danger'
-                  }`}>
-                    <h3 className="font-semibold text-secondary-400 mb-1 text-sm uppercase">Overall Risk Level</h3>
-                    <p className={`text-5xl font-bold ${
-                      assessment.overallRisk === 'Low' ? 'text-success' :
-                      assessment.overallRisk === 'Medium' ? 'text-warning' :
-                      'text-danger'
-                    }`}>{assessment.overallRisk}</p>
-                    <p className="text-sm text-secondary-500 mt-2">Risk Score: {assessment.riskScore}/100</p>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-primary-800 p-4 rounded-lg border border-primary-700">
-                      <h3 className="font-semibold text-secondary-400 mb-1 text-xs uppercase">Neck Angle</h3>
-                      <p className="text-3xl font-bold text-accent">{assessment.neckAngle}°</p>
-                      <p className="text-xs text-secondary-500 mt-1">{assessment.neckRisk} Risk</p>
+                  <div className="bg-gradient-to-br from-accent/5 to-accent/10 p-4 rounded-lg border border-accent/30">
+                    <div className="flex items-center mb-3">
+                      <svg className="w-5 h-5 text-accent mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      <h3 className="font-semibold text-white text-sm uppercase">AI-Powered Structural Analysis</h3>
                     </div>
-                    
-                    <div className="bg-primary-800 p-4 rounded-lg border border-primary-700">
-                      <h3 className="font-semibold text-secondary-400 mb-1 text-xs uppercase">Back Angle</h3>
-                      <p className="text-3xl font-bold text-accent">{assessment.backAngle}°</p>
-                      <p className="text-xs text-secondary-500 mt-1">{assessment.backRisk} Risk</p>
-                    </div>
-                    
-                    <div className="bg-primary-800 p-4 rounded-lg border border-primary-700">
-                      <h3 className="font-semibold text-secondary-400 mb-1 text-xs uppercase">Shoulder Angle</h3>
-                      <p className="text-3xl font-bold text-accent">{assessment.shoulderAngle}°</p>
-                    </div>
-                    
-                    <div className="bg-primary-800 p-4 rounded-lg border border-primary-700">
-                      <h3 className="font-semibold text-secondary-400 mb-1 text-xs uppercase">Back Load Est.</h3>
-                      <p className="text-3xl font-bold text-accent">{assessment.backLoad}</p>
-                      <p className="text-xs text-secondary-500 mt-1">kg</p>
+                    <div className="text-sm text-secondary-200 whitespace-pre-wrap leading-relaxed font-mono bg-primary-950/50 p-4 rounded border border-primary-700 max-h-[600px] overflow-y-auto">
+                      {analysis}
                     </div>
                   </div>
                   
-                  <div className={`p-4 rounded border ${
-                    assessment.overallRisk === 'Low' ? 'bg-success/5 border-success/30' :
-                    assessment.overallRisk === 'Medium' ? 'bg-warning/5 border-warning/30' : 
-                    'bg-danger/5 border-danger/30'
-                  }`}>
-                    <h3 className={`font-semibold mb-2 text-sm uppercase ${
-                      assessment.overallRisk === 'Low' ? 'text-success' :
-                      assessment.overallRisk === 'Medium' ? 'text-warning' : 'text-danger'
-                    }`}>Corrective Recommendations</h3>
-                    <ul className="text-sm text-secondary-300 space-y-1">
-                      {assessment.overallRisk === 'Low' && (
-                        <>
-                          <li>• Maintain current posture alignment</li>
-                          <li>• Implement regular break intervals (30 min)</li>
-                          <li>• Perform light stretching exercises</li>
-                        </>
-                      )}
-                      {assessment.overallRisk === 'Medium' && (
-                        <>
-                          <li>• Adjust posture immediately to reduce strain</li>
-                          <li>• Maintain neutral spine alignment</li>
-                          <li>• Utilize ergonomic support equipment</li>
-                          <li>• Reduce break intervals to 20 minutes</li>
-                        </>
-                      )}
-                      {assessment.overallRisk === 'High' && (
-                        <>
-                          <li>• URGENT: Modify working posture immediately</li>
-                          <li>• Cease heavy manual handling in current position</li>
-                          <li>• Employ mechanical assistance for load handling</li>
-                          <li>• Consult occupational health specialist</li>
-                          <li>• Consider ergonomic training program</li>
-                        </>
-                      )}
+                  <div className="bg-primary-800/50 p-4 rounded border border-primary-700">
+                    <h3 className="font-semibold mb-2 text-white text-sm uppercase">Analysis Tips</h3>
+                    <ul className="text-xs sm:text-sm text-secondary-300 space-y-1">
+                      <li>• Review all identified structural elements for accuracy</li>
+                      <li>• Verify load magnitudes and positions</li>
+                      <li>• Check support conditions and boundary constraints</li>
+                      <li>• Validate calculated reactions and moments</li>
+                      <li>• Use this as a preliminary analysis - always verify with manual calculations</li>
+                      <li>• For critical structures, consult a licensed structural engineer</li>
                     </ul>
                   </div>
                   
-                  <div className="text-xs text-secondary-500 font-mono">
-                    Assessment Time: {new Date(assessment.timestamp).toLocaleString()}
+                  <div className="bg-warning/5 border border-warning/30 p-4 rounded">
+                    <div className="flex items-start">
+                      <svg className="w-5 h-5 text-warning mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <div>
+                        <h4 className="font-semibold text-warning mb-1 text-sm">Professional Disclaimer</h4>
+                        <p className="text-xs text-secondary-300">
+                          AI-generated analysis is for educational and preliminary design purposes only. 
+                          All structural designs must be reviewed and stamped by a licensed professional engineer 
+                          before construction or implementation.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              ) : null}
+              )}
               
-              {!assessment && !loading && (
+              {!analysis && !loading && (
                 <div className="text-center py-12 text-secondary-500">
-                  <svg className="w-24 h-24 mx-auto mb-4 text-secondary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  <svg className="w-20 sm:w-24 h-20 sm:h-24 mx-auto mb-4 text-secondary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                  <p>Activate camera and analyze posture to view results</p>
+                  <p className="text-sm sm:text-base">Upload a structural diagram to begin AI analysis</p>
+                  <p className="text-xs sm:text-sm mt-2 text-secondary-600">Hand-drawn sketches and digital diagrams supported</p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+        
+        <div className="mt-8 bg-primary-900 rounded-lg shadow-lg border border-primary-800 p-6">
+          <h3 className="text-xl font-bold text-white mb-4">How to Get Best Results</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="bg-primary-800 p-4 rounded-lg">
+              <div className="flex items-center mb-2">
+                <div className="bg-accent/20 p-2 rounded mr-3">
+                  <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+                  </svg>
+                </div>
+                <h4 className="font-semibold text-white">Clear Diagram</h4>
+              </div>
+              <p className="text-sm text-secondary-300">
+                Draw clearly with good contrast. Label all loads, dimensions, and supports.
+              </p>
+            </div>
+            
+            <div className="bg-primary-800 p-4 rounded-lg">
+              <div className="flex items-center mb-2">
+                <div className="bg-accent/20 p-2 rounded mr-3">
+                  <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <h4 className="font-semibold text-white">Include Annotations</h4>
+              </div>
+              <p className="text-sm text-secondary-300">
+                Add dimensions, load values, material properties, and support types.
+              </p>
+            </div>
+            
+            <div className="bg-primary-800 p-4 rounded-lg">
+              <div className="flex items-center mb-2">
+                <div className="bg-accent/20 p-2 rounded mr-3">
+                  <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h4 className="font-semibold text-white">Add Context</h4>
+              </div>
+              <p className="text-sm text-secondary-300">
+                Provide additional information in the context field for better analysis.
+              </p>
             </div>
           </div>
         </div>

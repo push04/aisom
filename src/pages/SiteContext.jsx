@@ -61,8 +61,8 @@ function SiteContext() {
     <div className="min-h-screen bg-primary-950">
       <div className="container mx-auto px-6 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Site Context Analysis</h1>
-          <p className="text-secondary-300">Environmental conditions and geospatial data for construction planning</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Corridor Environment Monitor</h1>
+          <p className="text-secondary-300">Real-time environmental data for railway corridor planning: monsoon alerts, soil moisture, thermal gradients</p>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

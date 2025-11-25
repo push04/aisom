@@ -1,6 +1,7 @@
 {
-  "name": "structuralvision-ai",
-  "version": "1.0.0",
+  "name": "railvision-bharat-ai",
+  "version": "2.0.0",
+  "description": "AI-powered Indian Railway Infrastructure Intelligence Platform",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5000",

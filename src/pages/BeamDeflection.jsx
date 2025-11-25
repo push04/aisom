@@ -119,8 +119,8 @@ Generated: ${new Date().toLocaleString()}
     <div className="min-h-screen bg-primary-950">
       <div className="container mx-auto px-6 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Beam Analysis Module</h1>
-          <p className="text-secondary-300">Comprehensive deflection, moment, and shear force analysis</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Bridge Girder & Sleeper Load Analysis</h1>
+          <p className="text-secondary-300">Railway bridge structural analysis with IRS Bridge Rules and RDSO standards</p>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
