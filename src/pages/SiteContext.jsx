@@ -1,8 +1,19 @@
 import React, { useState, useEffect } from 'react'
 
+const INDIAN_RAILWAY_ZONES = [
+  { name: 'Northern Railway', lat: 28.6139, lon: 77.2090 },
+  { name: 'Southern Railway', lat: 13.0827, lon: 80.2707 },
+  { name: 'Central Railway', lat: 19.0760, lon: 72.8777 },
+  { name: 'Eastern Railway', lat: 22.5726, lon: 88.3639 },
+  { name: 'Western Railway', lat: 19.0760, lon: 72.8777 },
+  { name: 'North Western Railway', lat: 26.9124, lon: 75.7873 },
+  { name: 'South Central Railway', lat: 17.3850, lon: 78.4867 },
+  { name: 'South Eastern Railway', lat: 22.5726, lon: 88.3639 }
+]
+
 function SiteContext() {
-  const [location, setLocation] = useState('')
-  const [coordinates, setCoordinates] = useState({ lat: 51.5074, lon: -0.1278 })
+  const [selectedZone, setSelectedZone] = useState(INDIAN_RAILWAY_ZONES[0])
+  const [coordinates, setCoordinates] = useState({ lat: 28.6139, lon: 77.2090 })
   const [weather, setWeather] = useState(null)
   const [loading, setLoading] = useState(false)
   
@@ -10,7 +21,7 @@ function SiteContext() {
     setLoading(true)
     try {
       const response = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto`
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=Asia/Kolkata`
       )
       const data = await response.json()
       
@@ -33,8 +44,9 @@ function SiteContext() {
     fetchWeather(coordinates.lat, coordinates.lon)
   }, [coordinates])
   
-  const handleSearch = () => {
-    alert('Location search requires deployment for geocoding API proxy. Using default coordinates.')
+  const handleZoneSelect = (zone) => {
+    setSelectedZone(zone)
+    setCoordinates({ lat: zone.lat, lon: zone.lon })
   }
   
   const getWeatherDescription = (code) => {
@@ -56,107 +68,116 @@ function SiteContext() {
     }
     return descriptions[code] || 'Unknown'
   }
+
+  const getRailwayImpact = (weather) => {
+    const impacts = []
+    
+    if (weather.current.temperature > 45) {
+      impacts.push({ type: 'critical', text: 'Extreme heat - rail buckle risk, speed restriction advised' })
+    } else if (weather.current.temperature > 40) {
+      impacts.push({ type: 'warning', text: 'High temperature - monitor for rail expansion' })
+    }
+    
+    if (weather.current.temperature < 5) {
+      impacts.push({ type: 'warning', text: 'Cold conditions - check point heaters' })
+    }
+    
+    if (weather.current.windSpeed > 70) {
+      impacts.push({ type: 'critical', text: 'High winds - OHE inspection required' })
+    } else if (weather.current.windSpeed > 50) {
+      impacts.push({ type: 'warning', text: 'Strong winds - monitor pantograph operations' })
+    }
+    
+    if (weather.current.humidity > 90) {
+      impacts.push({ type: 'info', text: 'High humidity - fog formation likely' })
+    }
+    
+    const weatherCode = weather.current.weatherCode
+    if ([61, 63, 65, 95].includes(weatherCode)) {
+      impacts.push({ type: 'warning', text: 'Rainfall - check track drainage and ballast' })
+    }
+    
+    if (impacts.length === 0) {
+      impacts.push({ type: 'good', text: 'Weather conditions favorable for railway operations' })
+    }
+    
+    return impacts
+  }
   
   return (
-    <div className="min-h-screen bg-primary-950">
-      <div className="container mx-auto px-6 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Corridor Environment Monitor</h1>
-          <p className="text-secondary-300">Real-time environmental data for railway corridor planning: monsoon alerts, soil moisture, thermal gradients</p>
-        </div>
+    <div className="min-h-screen bg-black p-6 page-enter">
+      <div className="max-w-7xl mx-auto">
+        <header className="module-header">
+          <div>
+            <h1 className="module-title">Corridor Environment Monitor</h1>
+            <p className="module-subtitle">Real-time weather data for railway corridor planning and operations</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="status-indicator online" />
+            <span className="text-xs text-primary-500">LIVE</span>
+          </div>
+        </header>
         
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="space-y-6">
-            <div className="bg-primary-900 rounded-lg shadow-lg border border-primary-800">
-              <div className="px-6 py-4 border-b border-primary-800">
-                <h2 className="text-xl font-bold text-white">Location Parameters</h2>
+            <div className="rail-card">
+              <div className="p-6 border-b border-primary-800">
+                <h2 className="text-lg font-bold text-white">Railway Zone Selection</h2>
               </div>
               <div className="p-6">
-                <div className="flex space-x-2 mb-4">
-                  <input
-                    type="text"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    placeholder="Enter location coordinates"
-                    className="flex-1 bg-primary-800 border border-primary-700 text-white rounded px-3 py-2 focus:border-accent focus:outline-none"
-                  />
-                  <button
-                    onClick={handleSearch}
-                    className="bg-accent hover:bg-accent-hover text-white px-6 py-2 rounded transition-all duration-200"
-                  >
-                    Search
-                  </button>
-                </div>
-                
-                <div className="space-y-2 text-sm font-mono">
-                  <div className="flex justify-between p-2 bg-primary-800 rounded">
-                    <span className="text-secondary-400">Latitude:</span>
-                    <span className="text-white">{coordinates.lat}°</span>
-                  </div>
-                  <div className="flex justify-between p-2 bg-primary-800 rounded">
-                    <span className="text-secondary-400">Longitude:</span>
-                    <span className="text-white">{coordinates.lon}°</span>
-                  </div>
+                <div className="space-y-2">
+                  {INDIAN_RAILWAY_ZONES.map((zone, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleZoneSelect(zone)}
+                      className={`w-full text-left p-3 rounded-lg transition-all ${
+                        selectedZone.name === zone.name
+                          ? 'bg-white text-black'
+                          : 'bg-primary-900/50 text-primary-400 hover:bg-primary-800 border border-primary-800'
+                      }`}
+                    >
+                      <div className="font-medium">{zone.name}</div>
+                      <div className="text-xs opacity-70">{zone.lat.toFixed(2)}°N, {zone.lon.toFixed(2)}°E</div>
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
             
-            <div className="bg-primary-900 rounded-lg shadow-lg border border-primary-800">
-              <div className="px-6 py-4 border-b border-primary-800">
-                <h2 className="text-xl font-bold text-white">Current Conditions</h2>
+            <div className="rail-card">
+              <div className="p-6 border-b border-primary-800">
+                <h2 className="text-lg font-bold text-white">Current Conditions</h2>
               </div>
               <div className="p-6">
                 {loading && (
                   <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-accent border-t-transparent mx-auto"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-2 border-white border-t-transparent mx-auto"></div>
                   </div>
                 )}
                 
                 {weather && !loading && (
                   <div className="space-y-4">
-                    <div className="bg-accent/10 p-4 rounded-lg border border-accent/30">
-                      <p className="text-sm text-secondary-400 mb-1">Weather Status</p>
-                      <p className="text-2xl font-bold text-accent">
+                    <div className="p-4 bg-primary-900/50 rounded-lg border border-white/20">
+                      <div className="text-xs uppercase tracking-wider text-primary-500 mb-1">Weather Status</div>
+                      <div className="text-2xl font-bold text-white">
                         {getWeatherDescription(weather.current.weatherCode)}
-                      </p>
+                      </div>
                     </div>
                     
                     <div className="grid grid-cols-3 gap-2">
-                      <div className="text-center p-3 bg-primary-800 rounded border border-primary-700">
-                        <p className="text-xs text-secondary-400 mb-1">Temp</p>
-                        <p className="text-xl font-bold text-white">{weather.current.temperature}°C</p>
+                      <div className="text-center p-3 bg-primary-900/50 rounded-lg border border-primary-800">
+                        <div className="text-xs text-primary-500 mb-1">Temp</div>
+                        <div className="text-xl font-bold text-white">{weather.current.temperature}°C</div>
                       </div>
-                      <div className="text-center p-3 bg-primary-800 rounded border border-primary-700">
-                        <p className="text-xs text-secondary-400 mb-1">Humidity</p>
-                        <p className="text-xl font-bold text-white">{weather.current.humidity}%</p>
+                      <div className="text-center p-3 bg-primary-900/50 rounded-lg border border-primary-800">
+                        <div className="text-xs text-primary-500 mb-1">Humidity</div>
+                        <div className="text-xl font-bold text-white">{weather.current.humidity}%</div>
                       </div>
-                      <div className="text-center p-3 bg-primary-800 rounded border border-primary-700">
-                        <p className="text-xs text-secondary-400 mb-1">Wind</p>
-                        <p className="text-xl font-bold text-white">{weather.current.windSpeed}</p>
-                        <p className="text-xs text-secondary-500">km/h</p>
+                      <div className="text-center p-3 bg-primary-900/50 rounded-lg border border-primary-800">
+                        <div className="text-xs text-primary-500 mb-1">Wind</div>
+                        <div className="text-xl font-bold text-white">{weather.current.windSpeed}</div>
+                        <div className="text-xs text-primary-600">km/h</div>
                       </div>
-                    </div>
-                    
-                    <div className="bg-primary-800/50 p-4 rounded border border-primary-700">
-                      <h3 className="font-semibold text-white mb-2 text-sm uppercase">Construction Impact Analysis</h3>
-                      <ul className="text-sm text-secondary-300 space-y-1">
-                        {weather.current.temperature > 30 && (
-                          <li>• High temperature - ensure worker hydration protocols</li>
-                        )}
-                        {weather.current.temperature < 5 && (
-                          <li>• Cold conditions - concrete curing time affected</li>
-                        )}
-                        {weather.current.windSpeed > 40 && (
-                          <li>• High winds - suspend crane operations</li>
-                        )}
-                        {weather.current.humidity > 80 && (
-                          <li>• High humidity - painting/coating work delayed</li>
-                        )}
-                        {weather.current.temperature > 5 && weather.current.temperature < 30 && 
-                         weather.current.windSpeed < 40 && (
-                          <li>• Favorable conditions for construction activities</li>
-                        )}
-                      </ul>
                     </div>
                   </div>
                 )}
@@ -165,58 +186,101 @@ function SiteContext() {
           </div>
           
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-primary-900 rounded-lg shadow-lg border border-primary-800">
-              <div className="px-6 py-4 border-b border-primary-800">
-                <h2 className="text-xl font-bold text-white">Geospatial Map</h2>
+            <div className="rail-card">
+              <div className="p-6 border-b border-primary-800">
+                <h2 className="text-lg font-bold text-white">Corridor Map - {selectedZone.name}</h2>
               </div>
               <div className="p-6">
                 <iframe
                   width="100%"
-                  height="500"
+                  height="400"
                   frameBorder="0"
                   scrolling="no"
                   marginHeight="0"
                   marginWidth="0"
-                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${coordinates.lon-0.1},${coordinates.lat-0.1},${coordinates.lon+0.1},${coordinates.lat+0.1}&layer=mapnik&marker=${coordinates.lat},${coordinates.lon}`}
-                  className="rounded border border-primary-700"
+                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${coordinates.lon-0.5},${coordinates.lat-0.5},${coordinates.lon+0.5},${coordinates.lat+0.5}&layer=mapnik&marker=${coordinates.lat},${coordinates.lon}`}
+                  className="rounded-lg border border-primary-700"
+                  style={{ filter: 'grayscale(100%) invert(90%) contrast(90%)' }}
                 ></iframe>
-                <div className="mt-3 text-sm">
+                <div className="mt-3">
                   <a 
-                    href={`https://www.openstreetmap.org/?mlat=${coordinates.lat}&mlon=${coordinates.lon}#map=15/${coordinates.lat}/${coordinates.lon}`}
+                    href={`https://www.openstreetmap.org/?mlat=${coordinates.lat}&mlon=${coordinates.lon}#map=12/${coordinates.lat}/${coordinates.lon}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-accent hover:text-accent-hover transition-colors"
+                    className="text-sm text-primary-500 hover:text-white transition-colors"
                   >
-                    View larger map →
+                    View larger map
                   </a>
                 </div>
               </div>
             </div>
             
             {weather && (
-              <div className="bg-primary-900 rounded-lg shadow-lg border border-primary-800">
-                <div className="px-6 py-4 border-b border-primary-800">
-                  <h2 className="text-xl font-bold text-white">7-Day Weather Forecast</h2>
-                </div>
-                <div className="p-6">
-                  <div className="grid grid-cols-2 md:grid-cols-7 gap-4">
-                    {weather.daily.temperature_2m_max.slice(0, 7).map((maxTemp, index) => (
-                      <div key={index} className="text-center p-3 bg-primary-800 rounded border border-primary-700">
-                        <p className="text-sm text-secondary-400 mb-2 font-semibold">
-                          {new Date(weather.daily.time[index]).toLocaleDateString('en-US', { weekday: 'short' })}
-                        </p>
-                        <p className="text-lg font-bold text-danger">{maxTemp}°</p>
-                        <p className="text-sm text-accent">{weather.daily.temperature_2m_min[index]}°</p>
-                        <div className="mt-2 pt-2 border-t border-primary-700">
-                          <p className="text-xs text-secondary-500">
-                            Precip: {weather.daily.precipitation_sum[index]}mm
-                          </p>
+              <>
+                <div className="rail-card">
+                  <div className="p-6 border-b border-primary-800">
+                    <h2 className="text-lg font-bold text-white">Railway Operations Impact</h2>
+                  </div>
+                  <div className="p-6">
+                    <div className="space-y-3">
+                      {getRailwayImpact(weather).map((impact, index) => (
+                        <div 
+                          key={index} 
+                          className={`p-4 rounded-lg border ${
+                            impact.type === 'critical' ? 'bg-primary-900 border-primary-600' :
+                            impact.type === 'warning' ? 'bg-primary-900/80 border-primary-700' :
+                            impact.type === 'good' ? 'bg-primary-900/50 border-white/20' :
+                            'bg-primary-900/50 border-primary-800'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            {impact.type === 'critical' && (
+                              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                              </svg>
+                            )}
+                            {impact.type === 'warning' && (
+                              <svg className="w-5 h-5 text-primary-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                            )}
+                            {impact.type === 'good' && (
+                              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                            )}
+                            <span className="text-sm text-primary-300">{impact.text}</span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
+
+                <div className="rail-card">
+                  <div className="p-6 border-b border-primary-800">
+                    <h2 className="text-lg font-bold text-white">7-Day Forecast</h2>
+                  </div>
+                  <div className="p-6">
+                    <div className="grid grid-cols-7 gap-2">
+                      {weather.daily.temperature_2m_max.slice(0, 7).map((maxTemp, index) => (
+                        <div key={index} className="text-center p-3 bg-primary-900/50 rounded-lg border border-primary-800">
+                          <div className="text-xs text-primary-500 mb-2 font-medium">
+                            {new Date(weather.daily.time[index]).toLocaleDateString('en-US', { weekday: 'short' })}
+                          </div>
+                          <div className="text-lg font-bold text-white">{maxTemp}°</div>
+                          <div className="text-sm text-primary-400">{weather.daily.temperature_2m_min[index]}°</div>
+                          <div className="mt-2 pt-2 border-t border-primary-800">
+                            <div className="text-xs text-primary-600">
+                              {weather.daily.precipitation_sum[index]}mm
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </div>

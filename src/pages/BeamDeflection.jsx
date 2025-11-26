@@ -1,20 +1,29 @@
 import React, { useState } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { materials, getMaterial } from '../utils/materials'
 import { calculateBeamAnalysis } from '../utils/beamCalculations'
 import { exportToJSON, exportToText, copyToClipboard } from '../utils/exportUtils'
+import { useToast } from '../components/Toast'
+
+const IRS_LOADING_STANDARDS = {
+  MBG: { name: 'Modified Broad Gauge', axleLoad: 25, description: 'Standard freight loading' },
+  HM: { name: 'Heavy Mineral', axleLoad: 30, description: 'Heavy haul mineral traffic' },
+  DFC: { name: 'DFC Standard', axleLoad: 32.5, description: 'Dedicated Freight Corridor' }
+}
 
 function BeamDeflection() {
+  const toast = useToast()
   const [beamType, setBeamType] = useState('simply-supported')
   const [loadType, setLoadType] = useState('point')
   const [diagramMode, setDiagramMode] = useState('moment')
   const [material, setMaterial] = useState('steel')
+  const [loadingStandard, setLoadingStandard] = useState('MBG')
   
-  const [length, setLength] = useState(5)
-  const [load, setLoad] = useState(10)
-  const [loadPosition, setLoadPosition] = useState(2.5)
-  const [width, setWidth] = useState(0.2)
-  const [height, setHeight] = useState(0.3)
+  const [length, setLength] = useState(12)
+  const [load, setLoad] = useState(250)
+  const [loadPosition, setLoadPosition] = useState(6)
+  const [width, setWidth] = useState(0.4)
+  const [height, setHeight] = useState(0.8)
   
   const [results, setResults] = useState(null)
   
@@ -26,8 +35,8 @@ function BeamDeflection() {
   ]
   
   const loadTypes = [
-    { value: 'point', label: 'Point Load' },
-    { value: 'udl', label: 'Uniform Distributed Load (UDL)' },
+    { value: 'point', label: 'Concentrated Axle Load' },
+    { value: 'udl', label: 'Distributed Track Load' },
     { value: 'triangular', label: 'Triangular Load' }
   ]
   
@@ -55,13 +64,14 @@ function BeamDeflection() {
       ...analysis,
       I: I * 1e8,
       E: E / 1e6,
-      material: mat.name
+      material: mat.name,
+      loadingStandard: IRS_LOADING_STANDARDS[loadingStandard]
     })
     
     const analyses = JSON.parse(localStorage.getItem('recentAnalyses') || '[]')
     analyses.unshift({
       type: 'beam',
-      title: `${beamTypes.find(b => b.value === beamType)?.label} - ${loadTypes.find(l => l.value === loadType)?.label}`,
+      title: `Bridge Analysis - ${beamTypes.find(b => b.value === beamType)?.label}`,
       timestamp: new Date().toISOString(),
       data: { maxDeflection: analysis.maxDeflection, maxMoment: analysis.maxMoment }
     })
@@ -69,45 +79,47 @@ function BeamDeflection() {
   }
   
   const handleExportJSON = () => {
-    exportToJSON({ ...results, parameters: { beamType, loadType, length, load, material } }, 'beam-analysis')
+    exportToJSON({ ...results, parameters: { beamType, loadType, length, load, material } }, 'bridge-analysis')
   }
   
   const handleExportText = () => {
     const text = `
-STRUCTURAL BEAM ANALYSIS REPORT
-================================
+RAILWAY BRIDGE STRUCTURAL ANALYSIS REPORT
+==========================================
 
-Configuration:
-- Beam Type: ${beamTypes.find(b => b.value === beamType)?.label}
-- Load Type: ${loadTypes.find(l => l.value === loadType)?.label}
+Configuration (IRS Bridge Rules):
+- Bridge Type: ${beamTypes.find(b => b.value === beamType)?.label}
+- Loading Standard: ${IRS_LOADING_STANDARDS[loadingStandard].name}
+- Axle Load: ${IRS_LOADING_STANDARDS[loadingStandard].axleLoad} tonnes
 - Material: ${results.material}
 - Span Length: ${length} m
 - Applied Load: ${load} kN
 
 Section Properties:
 - Width: ${width * 1000} mm
-- Height: ${height * 1000} mm
-- Moment of Inertia: ${results.I.toFixed(2)} cm⁴
+- Depth: ${height * 1000} mm
+- Moment of Inertia: ${results.I.toFixed(2)} cm4
 - Elastic Modulus: ${results.E} MPa
 
 Analysis Results:
 - Maximum Deflection: ${results.maxDeflection.toFixed(3)} mm
-- Maximum Moment: ${results.maxMoment.toFixed(2)} kN·m
-- Maximum Shear: ${results.maxShear.toFixed(2)} kN
+- Maximum Bending Moment: ${results.maxMoment.toFixed(2)} kN.m
+- Maximum Shear Force: ${results.maxShear.toFixed(2)} kN
 
-Serviceability Check (L/360):
-- Allowable Deflection: ${((length * 1000) / 360).toFixed(2)} mm
-- Status: ${results.maxDeflection < (length * 1000) / 360 ? 'PASS' : 'FAIL'}
+Serviceability Check (L/600 as per IRS):
+- Allowable Deflection: ${((length * 1000) / 600).toFixed(2)} mm
+- Status: ${results.maxDeflection < (length * 1000) / 600 ? 'PASS' : 'FAIL'}
 
 Generated: ${new Date().toLocaleString()}
+Reference: IRS Concrete Bridge Code / IRS Steel Bridge Code
     `
-    exportToText(text, 'beam-analysis')
+    exportToText(text, 'bridge-analysis')
   }
   
   const handleCopyResults = () => {
-    const text = `Deflection: ${results.maxDeflection.toFixed(3)} mm | Moment: ${results.maxMoment.toFixed(2)} kN·m | Shear: ${results.maxShear.toFixed(2)} kN`
+    const text = `Deflection: ${results.maxDeflection.toFixed(3)} mm | Moment: ${results.maxMoment.toFixed(2)} kN.m | Shear: ${results.maxShear.toFixed(2)} kN`
     copyToClipboard(text)
-    alert('Results copied to clipboard')
+    toast.success('Results copied to clipboard')
   }
   
   const checkDeflectionLimit = (limit) => {
@@ -116,25 +128,44 @@ Generated: ${new Date().toLocaleString()}
   }
   
   return (
-    <div className="min-h-screen bg-primary-950">
-      <div className="container mx-auto px-6 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Bridge Girder & Sleeper Load Analysis</h1>
-          <p className="text-secondary-300">Railway bridge structural analysis with IRS Bridge Rules and RDSO standards</p>
-        </div>
+    <div className="min-h-screen bg-black p-6 page-enter">
+      <div className="max-w-7xl mx-auto">
+        <header className="module-header">
+          <div>
+            <h1 className="module-title">Railway Bridge Analyzer</h1>
+            <p className="module-subtitle">Structural analysis per IRS Bridge Rules and RDSO standards</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="status-indicator online" />
+            <span className="text-xs text-primary-500">ACTIVE</span>
+          </div>
+        </header>
         
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="bg-primary-900 rounded-lg shadow-lg border border-primary-800">
-            <div className="px-6 py-4 border-b border-primary-800">
-              <h2 className="text-xl font-bold text-white">Input Parameters</h2>
+          <div className="rail-card">
+            <div className="p-6 border-b border-primary-800">
+              <h2 className="text-lg font-bold text-white">Input Parameters</h2>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-secondary-300 mb-2">Beam Configuration</label>
+                <label className="rail-label">IRS Loading Standard</label>
+                <select 
+                  value={loadingStandard} 
+                  onChange={(e) => setLoadingStandard(e.target.value)} 
+                  className="rail-select"
+                >
+                  {Object.entries(IRS_LOADING_STANDARDS).map(([key, std]) => (
+                    <option key={key} value={key}>{std.name} ({std.axleLoad}t)</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="rail-label">Bridge Configuration</label>
                 <select 
                   value={beamType} 
                   onChange={(e) => setBeamType(e.target.value)} 
-                  className="w-full bg-primary-800 border border-primary-700 text-white rounded px-3 py-2 focus:border-accent focus:outline-none"
+                  className="rail-select"
                 >
                   {beamTypes.map(bt => (
                     <option key={bt.value} value={bt.value}>{bt.label}</option>
@@ -143,11 +174,11 @@ Generated: ${new Date().toLocaleString()}
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-secondary-300 mb-2">Load Pattern</label>
+                <label className="rail-label">Load Pattern</label>
                 <select 
                   value={loadType} 
                   onChange={(e) => setLoadType(e.target.value)} 
-                  className="w-full bg-primary-800 border border-primary-700 text-white rounded px-3 py-2 focus:border-accent focus:outline-none"
+                  className="rail-select"
                 >
                   {loadTypes.map(lt => (
                     <option key={lt.value} value={lt.value}>{lt.label}</option>
@@ -156,81 +187,81 @@ Generated: ${new Date().toLocaleString()}
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-secondary-300 mb-2">Material Grade</label>
+                <label className="rail-label">Material Grade</label>
                 <select 
                   value={material} 
                   onChange={(e) => setMaterial(e.target.value)} 
-                  className="w-full bg-primary-800 border border-primary-700 text-white rounded px-3 py-2 focus:border-accent focus:outline-none"
+                  className="rail-select"
                 >
                   {Object.entries(materials).map(([key, mat]) => (
-                    <option key={key} value={key}>{mat.name} ({mat.description})</option>
+                    <option key={key} value={key}>{mat.name}</option>
                   ))}
                 </select>
               </div>
               
               <div className="border-t border-primary-800 pt-4">
-                <label className="block text-sm font-medium text-secondary-300 mb-2">Span Length (m)</label>
+                <label className="rail-label">Span Length (m)</label>
                 <input 
                   type="number" 
                   value={length} 
                   onChange={(e) => setLength(parseFloat(e.target.value))} 
-                  className="w-full bg-primary-800 border border-primary-700 text-white rounded px-3 py-2 focus:border-accent focus:outline-none" 
-                  step="0.1" 
+                  className="rail-input" 
+                  step="0.5" 
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-secondary-300 mb-2">Applied Load (kN)</label>
+                <label className="rail-label">Applied Load (kN)</label>
                 <input 
                   type="number" 
                   value={load} 
                   onChange={(e) => setLoad(parseFloat(e.target.value))} 
-                  className="w-full bg-primary-800 border border-primary-700 text-white rounded px-3 py-2 focus:border-accent focus:outline-none" 
-                  step="0.1" 
+                  className="rail-input" 
+                  step="10" 
                 />
               </div>
               
               {loadType === 'point' && beamType === 'simply-supported' && (
                 <div>
-                  <label className="block text-sm font-medium text-secondary-300 mb-2">Load Position (m)</label>
+                  <label className="rail-label">Load Position (m)</label>
                   <input 
                     type="number" 
                     value={loadPosition} 
                     onChange={(e) => setLoadPosition(parseFloat(e.target.value))} 
-                    className="w-full bg-primary-800 border border-primary-700 text-white rounded px-3 py-2 focus:border-accent focus:outline-none" 
-                    step="0.1" 
+                    className="rail-input" 
+                    step="0.5" 
                     max={length} 
                   />
                 </div>
               )}
               
               <div className="border-t border-primary-800 pt-4">
-                <label className="block text-sm font-medium text-secondary-300 mb-2">Section Width (m)</label>
+                <label className="rail-label">Section Width (m)</label>
                 <input 
                   type="number" 
                   value={width} 
                   onChange={(e) => setWidth(parseFloat(e.target.value))} 
-                  className="w-full bg-primary-800 border border-primary-700 text-white rounded px-3 py-2 focus:border-accent focus:outline-none" 
-                  step="0.01" 
+                  className="rail-input" 
+                  step="0.05" 
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-secondary-300 mb-2">Section Height (m)</label>
+                <label className="rail-label">Section Depth (m)</label>
                 <input 
                   type="number" 
                   value={height} 
                   onChange={(e) => setHeight(parseFloat(e.target.value))} 
-                  className="w-full bg-primary-800 border border-primary-700 text-white rounded px-3 py-2 focus:border-accent focus:outline-none" 
-                  step="0.01" 
+                  className="rail-input" 
+                  step="0.05" 
                 />
               </div>
               
               <button 
                 onClick={calculateBeam} 
-                className="w-full bg-accent hover:bg-accent-hover text-white py-3 rounded-lg transition-all duration-200 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
+                className="w-full bg-white hover:bg-primary-200 text-black py-3 rounded-lg transition-all duration-200 font-semibold"
               >
-                Calculate Analysis
+                Analyze Bridge
               </button>
             </div>
           </div>
@@ -238,82 +269,76 @@ Generated: ${new Date().toLocaleString()}
           <div className="lg:col-span-3 space-y-6">
             {results && (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-gradient-to-br from-accent/20 to-accent/10 border border-accent/30 rounded-lg p-6">
-                    <h3 className="text-sm font-medium text-secondary-400 mb-1">Maximum Deflection</h3>
-                    <p className="text-4xl font-bold text-accent mb-2">{results.maxDeflection.toFixed(3)}</p>
-                    <p className="text-sm text-secondary-500">millimeters</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="stat-card">
+                    <div className="text-xs uppercase tracking-wider text-primary-500 mb-1">Maximum Deflection</div>
+                    <div className="metric-display">{results.maxDeflection.toFixed(3)}</div>
+                    <div className="metric-label">millimeters</div>
                   </div>
-                  <div className="bg-gradient-to-br from-success/20 to-success/10 border border-success/30 rounded-lg p-6">
-                    <h3 className="text-sm font-medium text-secondary-400 mb-1">Maximum Moment</h3>
-                    <p className="text-4xl font-bold text-success mb-2">{results.maxMoment.toFixed(2)}</p>
-                    <p className="text-sm text-secondary-500">kN·m</p>
+                  <div className="stat-card">
+                    <div className="text-xs uppercase tracking-wider text-primary-500 mb-1">Maximum Moment</div>
+                    <div className="metric-display">{results.maxMoment.toFixed(2)}</div>
+                    <div className="metric-label">kN.m</div>
                   </div>
-                  <div className="bg-gradient-to-br from-warning/20 to-warning/10 border border-warning/30 rounded-lg p-6">
-                    <h3 className="text-sm font-medium text-secondary-400 mb-1">Maximum Shear</h3>
-                    <p className="text-4xl font-bold text-warning mb-2">{results.maxShear.toFixed(2)}</p>
-                    <p className="text-sm text-secondary-500">kN</p>
+                  <div className="stat-card">
+                    <div className="text-xs uppercase tracking-wider text-primary-500 mb-1">Maximum Shear</div>
+                    <div className="metric-display">{results.maxShear.toFixed(2)}</div>
+                    <div className="metric-label">kN</div>
                   </div>
                 </div>
                 
-                <div className="bg-primary-900 rounded-lg shadow-lg border border-primary-800">
-                  <div className="px-6 py-4 border-b border-primary-800 flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-white">Structural Diagrams</h2>
+                <div className="rail-card">
+                  <div className="p-6 border-b border-primary-800 flex justify-between items-center">
+                    <h2 className="text-lg font-bold text-white">Structural Diagrams</h2>
                     <div className="flex space-x-2">
-                      <button 
-                        onClick={() => setDiagramMode('deflection')} 
-                        className={`px-4 py-2 rounded transition-all duration-200 ${diagramMode === 'deflection' ? 'bg-accent text-white shadow-lg' : 'bg-primary-800 text-secondary-400 hover:bg-primary-700'}`}
-                      >
-                        Deflection
-                      </button>
-                      <button 
-                        onClick={() => setDiagramMode('moment')} 
-                        className={`px-4 py-2 rounded transition-all duration-200 ${diagramMode === 'moment' ? 'bg-accent text-white shadow-lg' : 'bg-primary-800 text-secondary-400 hover:bg-primary-700'}`}
-                      >
-                        BMD
-                      </button>
-                      <button 
-                        onClick={() => setDiagramMode('shear')} 
-                        className={`px-4 py-2 rounded transition-all duration-200 ${diagramMode === 'shear' ? 'bg-accent text-white shadow-lg' : 'bg-primary-800 text-secondary-400 hover:bg-primary-700'}`}
-                      >
-                        SFD
-                      </button>
+                      {['deflection', 'moment', 'shear'].map(mode => (
+                        <button 
+                          key={mode}
+                          onClick={() => setDiagramMode(mode)} 
+                          className={`px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium capitalize ${
+                            diagramMode === mode 
+                              ? 'bg-white text-black' 
+                              : 'bg-primary-800 text-primary-400 hover:bg-primary-700'
+                          }`}
+                        >
+                          {mode === 'moment' ? 'BMD' : mode === 'shear' ? 'SFD' : mode}
+                        </button>
+                      ))}
                     </div>
                   </div>
-                  <div className="p-6 bg-primary-800/30">
+                  <div className="p-6">
                     <ResponsiveContainer width="100%" height={350}>
                       <LineChart data={
                         diagramMode === 'deflection' ? results.deflectionData :
                         diagramMode === 'moment' ? results.momentData :
                         results.shearData
                       }>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#394B59" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                         <XAxis 
                           dataKey="x" 
-                          stroke="#9AA5B1"
-                          label={{ value: 'Position (m)', position: 'insideBottom', offset: -5, fill: '#9AA5B1' }} 
+                          stroke="#666"
+                          label={{ value: 'Position (m)', position: 'insideBottom', offset: -5, fill: '#666' }} 
                         />
                         <YAxis 
-                          stroke="#9AA5B1"
+                          stroke="#666"
                           label={{ 
                             value: diagramMode === 'deflection' ? 'Deflection (mm)' : 
-                                   diagramMode === 'moment' ? 'Moment (kN·m)' : 
-                                   'Shear (kN)', 
+                                   diagramMode === 'moment' ? 'Moment (kN.m)' : 'Shear (kN)', 
                             angle: -90, 
                             position: 'insideLeft',
-                            fill: '#9AA5B1'
+                            fill: '#666'
                           }} 
                         />
                         <Tooltip 
-                          contentStyle={{ backgroundColor: '#1F2933', border: '1px solid #486581', borderRadius: '8px' }}
-                          labelStyle={{ color: '#9AA5B1' }}
-                          itemStyle={{ color: '#2563EB' }}
+                          contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '8px' }}
+                          labelStyle={{ color: '#888' }}
+                          itemStyle={{ color: '#fff' }}
                         />
                         <Line 
                           type="monotone" 
                           dataKey="value" 
-                          stroke="#2563EB" 
-                          strokeWidth={3} 
+                          stroke="#ffffff" 
+                          strokeWidth={2} 
                           dot={false}
                           name={diagramMode === 'deflection' ? 'Deflection' : diagramMode === 'moment' ? 'Moment' : 'Shear'}
                         />
@@ -323,48 +348,48 @@ Generated: ${new Date().toLocaleString()}
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-primary-900 rounded-lg shadow-lg border border-primary-800 p-6">
-                    <h3 className="text-lg font-bold text-white mb-4">Serviceability Checks</h3>
+                  <div className="rail-card p-6">
+                    <h3 className="text-lg font-bold text-white mb-4">Serviceability Checks (IRS)</h3>
                     <div className="space-y-3">
-                      <div className="flex justify-between items-center p-3 bg-primary-800 rounded">
-                        <span className="text-secondary-300">L/360 Limit</span>
-                        <span className={`font-bold ${checkDeflectionLimit(360) ? 'text-success' : 'text-danger'}`}>
-                          {checkDeflectionLimit(360) ? 'PASS' : 'FAIL'}
+                      <div className="flex justify-between items-center p-3 bg-primary-900/50 rounded border border-primary-800">
+                        <span className="text-primary-400">L/600 (Railway Bridges)</span>
+                        <span className={`font-bold ${checkDeflectionLimit(600) ? 'text-white' : 'text-primary-400'}`}>
+                          {checkDeflectionLimit(600) ? 'PASS' : 'FAIL'}
                         </span>
                       </div>
-                      <div className="flex justify-between items-center p-3 bg-primary-800 rounded">
-                        <span className="text-secondary-300">L/240 Limit</span>
-                        <span className={`font-bold ${checkDeflectionLimit(240) ? 'text-success' : 'text-danger'}`}>
-                          {checkDeflectionLimit(240) ? 'PASS' : 'FAIL'}
+                      <div className="flex justify-between items-center p-3 bg-primary-900/50 rounded border border-primary-800">
+                        <span className="text-primary-400">L/800 (High Speed)</span>
+                        <span className={`font-bold ${checkDeflectionLimit(800) ? 'text-white' : 'text-primary-400'}`}>
+                          {checkDeflectionLimit(800) ? 'PASS' : 'FAIL'}
                         </span>
                       </div>
-                      <div className="flex justify-between items-center p-3 bg-primary-800 rounded">
-                        <span className="text-secondary-300">L/180 Limit</span>
-                        <span className={`font-bold ${checkDeflectionLimit(180) ? 'text-success' : 'text-danger'}`}>
-                          {checkDeflectionLimit(180) ? 'PASS' : 'FAIL'}
+                      <div className="flex justify-between items-center p-3 bg-primary-900/50 rounded border border-primary-800">
+                        <span className="text-primary-400">L/1000 (DFC Standard)</span>
+                        <span className={`font-bold ${checkDeflectionLimit(1000) ? 'text-white' : 'text-primary-400'}`}>
+                          {checkDeflectionLimit(1000) ? 'PASS' : 'FAIL'}
                         </span>
                       </div>
                     </div>
                   </div>
                   
-                  <div className="bg-primary-900 rounded-lg shadow-lg border border-primary-800 p-6">
+                  <div className="rail-card p-6">
                     <h3 className="text-lg font-bold text-white mb-4">Export Options</h3>
                     <div className="space-y-2">
                       <button 
                         onClick={handleExportJSON} 
-                        className="w-full bg-primary-800 hover:bg-primary-700 text-white py-3 rounded transition-all duration-200 border border-primary-700 hover:border-accent"
+                        className="w-full bg-primary-800 hover:bg-primary-700 text-white py-3 rounded-lg transition-all duration-200 border border-primary-700"
                       >
                         Export as JSON
                       </button>
                       <button 
                         onClick={handleExportText} 
-                        className="w-full bg-primary-800 hover:bg-primary-700 text-white py-3 rounded transition-all duration-200 border border-primary-700 hover:border-accent"
+                        className="w-full bg-primary-800 hover:bg-primary-700 text-white py-3 rounded-lg transition-all duration-200 border border-primary-700"
                       >
                         Generate Report
                       </button>
                       <button 
                         onClick={handleCopyResults} 
-                        className="w-full bg-primary-800 hover:bg-primary-700 text-white py-3 rounded transition-all duration-200 border border-primary-700 hover:border-accent"
+                        className="w-full bg-primary-800 hover:bg-primary-700 text-white py-3 rounded-lg transition-all duration-200 border border-primary-700"
                       >
                         Copy to Clipboard
                       </button>
@@ -375,11 +400,11 @@ Generated: ${new Date().toLocaleString()}
             )}
             
             {!results && (
-              <div className="bg-primary-900 rounded-lg shadow-lg border border-primary-800 p-12 text-center">
-                <svg className="w-24 h-24 mx-auto mb-4 text-secondary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              <div className="rail-card p-12 text-center">
+                <svg className="w-24 h-24 mx-auto mb-4 text-primary-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                 </svg>
-                <p className="text-secondary-400 text-lg">Configure beam parameters and calculate to view analysis results</p>
+                <p className="text-primary-500 text-lg">Configure bridge parameters and calculate to view analysis results</p>
               </div>
             )}
           </div>
